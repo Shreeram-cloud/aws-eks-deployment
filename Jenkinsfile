@@ -7,6 +7,8 @@ pipeline {
         ECR_REPO          = 'devops'
         IMAGE_TAG         = "${env.BUILD_NUMBER}"
         FULL_IMAGE        = "${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
+        GITHUB_TOKEN      = credentials('github-token')
+        GITOPS_REPO       = 'https://github.com/Shreeram-cloud/k8s-deploy-arcocd.git'
     }
 
     stages {
@@ -32,8 +34,28 @@ pipeline {
 
                     docker push ${FULL_IMAGE}
 
-                    docker tag ${FULL_IMAGE} ${ECR_REGISTRY}/${ECR_REPO}:latest
-                    docker push ${ECR_REGISTRY}/${ECR_REPO}:latest
+                    docker tag ${FULL_IMAGE} ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
+                    docker push ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Update GitOps Repo') {
+            steps {
+                sh """
+                    # Clone the GitOps repo
+                    git clone https://${GITHUB_TOKEN}@github.com/Shreeram-cloud/k8s-deploy-arcocd.git gitops
+
+                    # Update image tag in deployment.yaml
+                    sed -i 's|${ECR_REGISTRY}/${ECR_REPO}:.*|${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}|g' gitops/deployment.yaml
+
+                    # Commit and push
+                    cd gitops
+                    git config user.email "jenkins@ci.com"
+                    git config user.name "Jenkins"
+                    git add deployment.yaml
+                    git commit -m "ci: update image tag to ${IMAGE_TAG}"
+                    git push origin master
                 """
             }
         }
@@ -42,7 +64,7 @@ pipeline {
             steps {
                 sh """
                     docker rmi ${FULL_IMAGE} || true
-                    docker rmi ${ECR_REGISTRY}/${ECR_REPO}:latest || true
+                    rm -rf gitops
                 """
             }
         }
@@ -50,7 +72,7 @@ pipeline {
 
     post {
         success {
-            echo "Build ${IMAGE_TAG} pushed to ECR successfully"
+            echo "Build ${IMAGE_TAG} deployed — GitOps repo updated"
         }
         failure {
             echo "Pipeline failed — check the logs above"
