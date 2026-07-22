@@ -26,22 +26,15 @@ pipeline {
 
         stage('Push to ECR') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'aws-credentials',
-                    usernameVariable: 'AWS_ACCESS_KEY_ID',
-                    passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                )]) {
-                    sh """
-                        aws ecr get-login-password --region ${AWS_REGION} | \
-                        docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                sh """
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-                        docker push ${FULL_IMAGE}
+                    docker push ${FULL_IMAGE}
 
-                        # Also tag as latest
-                        docker tag ${FULL_IMAGE} ${ECR_REGISTRY}/${ECR_REPO}:latest
-                        docker push ${ECR_REGISTRY}/${ECR_REPO}:latest
-                    """
-                }
+                    docker tag ${FULL_IMAGE} ${ECR_REGISTRY}/${ECR_REPO}:latest
+                    docker push ${ECR_REGISTRY}/${ECR_REPO}:latest
+                """
             }
         }
 
